@@ -1,5 +1,3 @@
-/* selectlib.c */
-    
 #include <Python.h>
 #include <listobject.h>
 #include <stdlib.h>
@@ -7,6 +5,10 @@
 
 #ifndef PY_SSIZE_T_CLEAN
 #define PY_SSIZE_T_CLEAN
+#endif
+
+#ifndef SELECTLIB_VERSION
+#define SELECTLIB_VERSION "1.0.0"
 #endif
 
 /*
@@ -214,5 +216,13 @@ static struct PyModuleDef selectlibmodule = {
 PyMODINIT_FUNC
 PyInit_selectlib(void)
 {
-    return PyModule_Create(&selectlibmodule);
+    PyObject *m = PyModule_Create(&selectlibmodule);
+    if (m == NULL)
+        return NULL;
+    /* Add the module's version constant */
+    if (PyModule_AddStringConstant(m, "__version__", SELECTLIB_VERSION) < 0) {
+        Py_DECREF(m);
+        return NULL;
+    }
+    return m;
 }
