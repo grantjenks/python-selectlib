@@ -28,7 +28,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 setup(
     name='selectlib',
     version=get_version(),
-    description='Array-backed deque implementation written in C for fast double-ended operations.',
+    description='Lightweight C extension module for Python that implements several in‑place selection algorithms.',
     long_description=read_file('README.md'),
     long_description_content_type='text/markdown',
     author='Grant Jenks',
