@@ -16,6 +16,7 @@ class TestSelectLib(unittest.TestCase):
         self.algorithms = [
             ("quickselect", selectlib.quickselect),
             ("heapselect", selectlib.heapselect),
+            ("nth_element", selectlib.nth_element),
         ]
 
     def sorted_index_check(self, func, values, k, key=None):

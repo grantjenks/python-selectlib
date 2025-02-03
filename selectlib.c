@@ -3,6 +3,7 @@
 #include <listobject.h>
 #include <stdlib.h>
 #include <time.h>
+#include <math.h>
 
 #ifndef PY_SSIZE_T_CLEAN
 #define PY_SSIZE_T_CLEAN
@@ -11,6 +12,11 @@
 #ifndef SELECTLIB_VERSION
 #define SELECTLIB_VERSION "1.0.0"
 #endif
+
+/* Forward declaration for heapselect so that it can be used
+   in quickselect's fallback if the iteration limit is exceeded.
+*/
+static PyObject * selectlib_heapselect(PyObject *self, PyObject *args, PyObject *kwargs);
 
 /*
    Helper function that compares two PyObject*s using the < operator.
@@ -43,10 +49,10 @@ swap_items(PyObject *list, Py_ssize_t i, Py_ssize_t j, PyObject **keys)
 }
 
 /*
-   Standard in-place three-way partition (Dutch National Flag style) based on a given pivot.
+   Standard in‐place three‐way partition (Dutch National Flag style) based on a given pivot.
    Rearranges the list (and keys array if present) so that all elements whose key is less than
    pivot come first, followed by those equal to pivot, then those greater.
-   Upon return, *low is the first index of the "equal" section and *mid is one past the end.
+   Upon return, *low is the first index of the "equal" section and *mid is one past its end.
 */
 static int
 partition_by_pivot(PyObject *list, PyObject **keys, Py_ssize_t n, PyObject *pivot,
@@ -78,9 +84,11 @@ partition_by_pivot(PyObject *list, PyObject **keys, Py_ssize_t n, PyObject *pivo
 }
 
 /*
-   Original in-place quickselect implementation.
-   It partitions the list (and keys array if provided) so that
-   the element at index k is in its final sorted position.
+   Original in‐place quickselect implementation with an added iteration counter.
+   It partitions the list (and keys array if provided) so that the element at index k
+   is in its final sorted position.
+   If the number of iterations exceeds 4× the expected maximum recursion depth,
+   the function returns -2 to signal that a fallback is desired.
 */
 static int
 quickselect_inplace(PyObject *list, PyObject **keys,
@@ -91,13 +99,17 @@ quickselect_inplace(PyObject *list, PyObject **keys,
         srand((unsigned)time(NULL));
         seeded = 1;
     }
+    int iterations = 0;
+    /* Compute a max iteration limit: 4 times (1 + log₂(n)) */
+    double log_val = log((double)(right - left + 1)) / log(2.0);
+    long max_iter = 4 * (1 + (long)log_val);
 
     while (left < right) {
+        iterations++;
+        if (iterations > max_iter)
+            return -2;
         Py_ssize_t pivot_index = left + rand() % (right - left + 1);
         Py_ssize_t pos;
-        /* Use partition function similar to before.
-           We reuse the swap_items function and keys if available.
-         */
         /* Move pivot to the end */
         swap_items(list, pivot_index, right, keys);
         PyObject *pivot_val = keys ? keys[right] : PyList_GET_ITEM(list, right);
@@ -125,7 +137,7 @@ quickselect_inplace(PyObject *list, PyObject **keys,
 
 /*
    quickselect(values: list[Any], index: int, key=None) -> None
-   Partition the list in-place so that the element at the given index is in its
+   Partition the list in‐place so that the element at the given index is in its
    final sorted position. An optional key function may be provided.
 */
 static PyObject *
@@ -180,15 +192,23 @@ selectlib_quickselect(PyObject *self, PyObject *args, PyObject *kwargs)
         }
     }
 
-    if (n > 0) {
-        if (quickselect_inplace(values, keys, 0, n - 1, target_index) < 0) {
-            if (keys) {
-                for (Py_ssize_t i = 0; i < n; i++)
-                    Py_DECREF(keys[i]);
-                PyMem_Free(keys);
-            }
-            return NULL;
+    int ret = quickselect_inplace(values, keys, 0, n - 1, target_index);
+    if (ret == -2) {
+        /* Exceeded iteration limit; use heapselect fallback. */
+        if (keys) {
+            for (Py_ssize_t i = 0; i < n; i++)
+                Py_DECREF(keys[i]);
+            PyMem_Free(keys);
         }
+        return selectlib_heapselect(self, args, kwargs);
+    }
+    else if (ret < 0) {
+        if (keys) {
+            for (Py_ssize_t i = 0; i < n; i++)
+                Py_DECREF(keys[i]);
+            PyMem_Free(keys);
+        }
+        return NULL;
     }
     if (keys) {
         for (Py_ssize_t i = 0; i < n; i++)
@@ -199,7 +219,7 @@ selectlib_quickselect(PyObject *self, PyObject *args, PyObject *kwargs)
     Py_RETURN_NONE;
 }
 
-/* ---------- New heapselect implementation ---------- */
+/* ---------- heapselect implementation ---------- */
 
 /* Structure to hold an element for the heap.
    Each HeapItem contains a pointer to the list element (value) and
@@ -252,9 +272,9 @@ build_max_heap(HeapItem *heap, Py_ssize_t heap_size)
 
 /*
    heapselect(values: list[Any], index: int, key=None) -> None
-   Partition the list in-place so that the element at the given index (k) is in its
+   Partition the list in‐place so that the element at the given index (k) is in its
    final sorted position. This implementation uses a heap strategy (specifically,
-   building a fixed-size max-heap on the first k+1 elements, then processing the rest)
+   building a fixed‐size max-heap on the first k+1 elements, then processing the rest)
    to determine the kth smallest element.
 */
 static PyObject *
@@ -342,7 +362,6 @@ selectlib_heapselect(PyObject *self, PyObject *args, PyObject *kwargs)
         PyObject *current_key = use_key ? keys[i] : PyList_GET_ITEM(values, i);
         int cmp = less_than(current_key, heap[0].key);
         if (cmp < 0) {
-            /* Propagate error */
             PyMem_Free(heap);
             if (keys) {
                 for (Py_ssize_t j = 0; j < n; j++)
@@ -352,25 +371,28 @@ selectlib_heapselect(PyObject *self, PyObject *args, PyObject *kwargs)
             return NULL;
         }
         if (cmp == 1) {  /* current < heap root */
-            /* Replace the root with current and re-heapify */
             heap[0].value = PyList_GET_ITEM(values, i);
             heap[0].key = current_key;
             max_heapify(heap, heap_size, 0);
         }
     }
 
-    /* The kth smallest element candidate is now at the root of the heap. */
-    PyObject *pivot = heap[0].value;
-    PyObject *pivot_key = heap[0].key;
-
+    /* Save the pivot value and its key (if in use) from the heap’s root */
+    PyObject *pivot;
+    PyObject *pivot_key = NULL;
+    if (use_key) {
+        pivot_key = heap[0].key;
+        pivot = heap[0].value;
+    } else {
+        pivot = heap[0].value;
+    }
     PyMem_Free(heap);
 
-    /* Partition the entire list around the pivot value (using pivot_key).
-       After partitioning, the block of elements equal to the pivot should contain
-       the target_index.
+    /* Partition the entire list around the pivot.
+       If a key function is in use, pass the computed pivot_key.
     */
     Py_ssize_t low, mid;
-    if (partition_by_pivot(values, keys, n, pivot_key, &low, &mid) < 0) {
+    if (partition_by_pivot(values, keys, n, use_key ? pivot_key : pivot, &low, &mid) < 0) {
         if (keys) {
             for (Py_ssize_t i = 0; i < n; i++)
                 Py_DECREF(keys[i]);
@@ -379,9 +401,6 @@ selectlib_heapselect(PyObject *self, PyObject *args, PyObject *kwargs)
         return NULL;
     }
 
-    /* Verify that target_index lies in the "equal" partition.
-       (In a correct run this must be true.)
-    */
     if (!(target_index >= low && target_index < mid)) {
         if (keys) {
             for (Py_ssize_t i = 0; i < n; i++)
@@ -389,6 +408,98 @@ selectlib_heapselect(PyObject *self, PyObject *args, PyObject *kwargs)
             PyMem_Free(keys);
         }
         PyErr_SetString(PyExc_RuntimeError, "heapselect partition failed to locate the target index");
+        return NULL;
+    }
+
+    if (keys) {
+        for (Py_ssize_t i = 0; i < n; i++)
+            Py_DECREF(keys[i]);
+        PyMem_Free(keys);
+    }
+
+    Py_RETURN_NONE;
+}
+
+/*
+   nth_element(values: list[Any], index: int, key=None) -> None
+   Partition the list in‐place so that the element at the given index is in its
+   final sorted position. This interface adapts the selection algorithm as follows:
+     • If index is less than (len(values) >> 3), the heapselect method is used.
+     • Otherwise, quickselect is attempted. If quickselect exceeds 4× the expected
+       recursion depth (detected via iteration count), the routine falls back to heapselect.
+*/
+static PyObject *
+selectlib_nth_element(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    static char *kwlist[] = {"values", "index", "key", NULL};
+    PyObject *values;
+    Py_ssize_t target_index;
+    PyObject *key = Py_None;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "On|O:nth_element",
+                                     kwlist, &values, &target_index, &key))
+        return NULL;
+
+    if (!PyList_Check(values)) {
+        PyErr_SetString(PyExc_TypeError, "values must be a list");
+        return NULL;
+    }
+    Py_ssize_t n = PyList_Size(values);
+    if (n == 0 || target_index < 0 || target_index >= n) {
+        PyErr_SetString(PyExc_IndexError, "index out of range");
+        return NULL;
+    }
+
+    /* If target_index is small compared to n, use heapselect directly */
+    if (target_index < (n >> 3)) {
+        return selectlib_heapselect(self, args, kwargs);
+    }
+
+    int use_key = 0;
+    if (key != Py_None) {
+        if (!PyCallable_Check(key)) {
+            PyErr_SetString(PyExc_TypeError, "key must be callable");
+            return NULL;
+        }
+        use_key = 1;
+    }
+
+    PyObject **keys = NULL;
+    if (use_key) {
+        keys = PyMem_New(PyObject *, n);
+        if (keys == NULL) {
+            PyErr_NoMemory();
+            return NULL;
+        }
+        for (Py_ssize_t i = 0; i < n; i++) {
+            PyObject *item = PyList_GET_ITEM(values, i);
+            PyObject *keyval = PyObject_CallFunctionObjArgs(key, item, NULL);
+            if (keyval == NULL) {
+                for (Py_ssize_t j = 0; j < i; j++)
+                    Py_DECREF(keys[j]);
+                PyMem_Free(keys);
+                return NULL;
+            }
+            keys[i] = keyval;
+        }
+    }
+
+    int ret;
+    ret = quickselect_inplace(values, keys, 0, n - 1, target_index);
+    if (ret == -2) {
+        /* Exceeded iteration threshold; fall back to heapselect. */
+        if (keys) {
+            for (Py_ssize_t i = 0; i < n; i++)
+                Py_DECREF(keys[i]);
+            PyMem_Free(keys);
+        }
+        return selectlib_heapselect(self, args, kwargs);
+    } else if (ret < 0) {
+        if (keys) {
+            for (Py_ssize_t i = 0; i < n; i++)
+                Py_DECREF(keys[i]);
+            PyMem_Free(keys);
+        }
         return NULL;
     }
 
@@ -411,13 +522,18 @@ static PyMethodDef selectlib_methods[] = {
      METH_VARARGS | METH_KEYWORDS,
      "heapselect(values: list[Any], index: int, key=None) -> None\n\n"
      "Partition the list in-place using a heap strategy so that the element at the given index is in its final sorted position."},
+    {"nth_element", (PyCFunction)selectlib_nth_element,
+     METH_VARARGS | METH_KEYWORDS,
+     "nth_element(values: list[Any], index: int, key=None) -> None\n\n"
+     "Partition the list in-place so that the element at the given index is in its final sorted position. "
+     "Uses heapselect if the target index is less than (len(values) >> 3) or if quickselect exceeds its iteration limit."},
     {NULL, NULL, 0, NULL}
 };
 
 static struct PyModuleDef selectlibmodule = {
     PyModuleDef_HEAD_INIT,
     "selectlib",
-    "Module that implements the quickselect and heapselect algorithms.",
+    "Module that implements the quickselect, heapselect, and nth_element algorithms.",
     -1,
     selectlib_methods,
 };
