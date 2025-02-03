@@ -10,13 +10,12 @@ import selectlib
 
 
 class TestSelectLib(unittest.TestCase):
-
     def setUp(self):
         # Define the algorithms to test as tuples: (name, function)
         self.algorithms = [
-            ("quickselect", selectlib.quickselect),
-            ("heapselect", selectlib.heapselect),
-            ("nth_element", selectlib.nth_element),
+            ('quickselect', selectlib.quickselect),
+            ('heapselect', selectlib.heapselect),
+            ('nth_element', selectlib.nth_element),
         ]
 
     def sorted_index_check(self, func, values, k, key=None):
@@ -39,7 +38,7 @@ class TestSelectLib(unittest.TestCase):
                 self.assertLessEqual(key(item), key(kth_value))
             else:
                 self.assertLessEqual(item, kth_value)
-        for item in values[k + 1:]:
+        for item in values[k + 1 :]:
             if key:
                 self.assertGreaterEqual(key(item), key(kth_value))
             else:
@@ -55,7 +54,7 @@ class TestSelectLib(unittest.TestCase):
                 self.assertEqual(values[k], 5)
                 for item in values[:k]:
                     self.assertLessEqual(item, values[k])
-                for item in values[k + 1:]:
+                for item in values[k + 1 :]:
                     self.assertGreaterEqual(item, values[k])
 
     def test_reversed_list(self):
@@ -93,14 +92,14 @@ class TestSelectLib(unittest.TestCase):
                 kth_value = values[k]
                 for item in values[:k]:
                     self.assertLessEqual(-item, -kth_value)
-                for item in values[k + 1:]:
+                for item in values[k + 1 :]:
                     self.assertGreaterEqual(-item, -kth_value)
 
     def test_non_list_input(self):
         for name, func in self.algorithms:
             with self.subTest(algorithm=name):
                 with self.assertRaises(TypeError):
-                    func("not a list", 0)
+                    func('not a list', 0)
 
     def test_out_of_range_index(self):
         for name, func in self.algorithms:
@@ -111,9 +110,9 @@ class TestSelectLib(unittest.TestCase):
 
     def test_version_attribute(self):
         # Test that the module has a non-empty __version__ attribute.
-        self.assertTrue(hasattr(selectlib, "__version__"))
+        self.assertTrue(hasattr(selectlib, '__version__'))
         self.assertIsInstance(selectlib.__version__, str)
-        self.assertNotEqual(selectlib.__version__, "")
+        self.assertNotEqual(selectlib.__version__, '')
 
 
 if __name__ == '__main__':
