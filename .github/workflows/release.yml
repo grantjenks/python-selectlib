@@ -28,7 +28,7 @@ jobs:
 
       - name: Build wheels with cibuildwheel
         env:
-          CIBW_TEST_COMMAND: python -m unittest discover -v -t {package}
+          CIBW_TEST_COMMAND: python {package}/test_selectlib.py
         run: cibuildwheel --output-dir wheelhouse .
 
       - name: Upload built wheels
