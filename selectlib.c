@@ -10,7 +10,7 @@
 #endif
 
 #ifndef SELECTLIB_VERSION
-#define SELECTLIB_VERSION "1.0.1"
+#define SELECTLIB_VERSION "1.0.2"
 #endif
 
 /* Forward declaration for heapselect so that it can be used
