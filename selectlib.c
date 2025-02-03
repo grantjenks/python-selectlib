@@ -424,7 +424,7 @@ selectlib_heapselect(PyObject *self, PyObject *args, PyObject *kwargs)
    nth_element(values: list[Any], index: int, key=None) -> None
    Partition the list in‐place so that the element at the given index is in its
    final sorted position. This interface adapts the selection algorithm as follows:
-     • If index is less than (len(values) >> 3), the heapselect method is used.
+     • If index is less than (len(values) >> 4), the heapselect method is used.
      • Otherwise, quickselect is attempted. If quickselect exceeds 4× the expected
        recursion depth (detected via iteration count), the routine falls back to heapselect.
 */
@@ -451,7 +451,7 @@ selectlib_nth_element(PyObject *self, PyObject *args, PyObject *kwargs)
     }
 
     /* If target_index is small compared to n, use heapselect directly */
-    if (target_index < (n >> 3)) {
+    if (target_index < (n >> 4)) {
         return selectlib_heapselect(self, args, kwargs);
     }
 
@@ -526,7 +526,7 @@ static PyMethodDef selectlib_methods[] = {
      METH_VARARGS | METH_KEYWORDS,
      "nth_element(values: list[Any], index: int, key=None) -> None\n\n"
      "Partition the list in-place so that the element at the given index is in its final sorted position. "
-     "Uses heapselect if the target index is less than (len(values) >> 3) or if quickselect exceeds its iteration limit."},
+     "Uses heapselect if the target index is less than (len(values) >> 4) or if quickselect exceeds its iteration limit."},
     {NULL, NULL, 0, NULL}
 };
 

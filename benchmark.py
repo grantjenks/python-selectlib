@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Benchmark comparisons for four methods to obtain the K smallest items from a list,
+Benchmark comparisons for five methods to obtain the K smallest items from a list,
 for various values of K with different list sizes N (varying from 1,000 to 1,000,000).
 
 For each method and each chosen K (as a percentage of N), the test is run 5 times
@@ -9,8 +9,9 @@ and the median runtime is recorded.
 Methods benchmarked:
   1. Using built‐in sort: sort the list and slice the first K elements.
   2. Using heapq.nsmallest: use the heap‐based algorithm.
-  3. Using quickselect: partition the list with selectlib.quickselect and slice the first K elements.
-  4. Using heapselect: partition the list with selectlib.heapselect and slice the first K elements.
+  3. Using quickselect: partition the list with selectlib.quickselect and then sort the first K elements.
+  4. Using heapselect: partition the list with selectlib.heapselect and then sort the first K elements.
+  5. Using nth_element: partition the list with selectlib.nth_element and then sort the first K elements.
 
 The benchmark results are then plotted as grouped bar charts (one per N value) in a vertical stack.
 Note: The percentages for K are now 0.2%, 1%, 10%, and 25% of N.
@@ -24,6 +25,7 @@ import matplotlib.pyplot as plt
 import selectlib
 
 # Define benchmark methods
+
 def bench_sort(values, K):
     """Sort a copy of the list and return the first K smallest items."""
     lst = values.copy()
@@ -41,7 +43,6 @@ def bench_quickselect(values, K):
     is in the correct sorted position; then sort and return the first K elements.
     """
     lst = values.copy()
-    # Partition in-place so that the element at index (K-1) is in the correct position
     selectlib.quickselect(lst, K - 1)
     result = lst[:K]
     result.sort()
@@ -53,24 +54,35 @@ def bench_heapselect(values, K):
     is in the correct sorted position; then sort and return the first K elements.
     """
     lst = values.copy()
-    # Partition in-place so that the element at index (K-1) is in the correct position.
     selectlib.heapselect(lst, K - 1)
     result = lst[:K]
     result.sort()
     return result
 
-# List of methods to benchmark
+def bench_nth_element(values, K):
+    """
+    Use selectlib.nth_element on a copy of the list to partition it so that the element at index K-1
+    is in the correct sorted position; then sort and return the first K elements.
+    """
+    lst = values.copy()
+    selectlib.nth_element(lst, K - 1)
+    result = lst[:K]
+    result.sort()
+    return result
+
+# Dictionary of methods to benchmark.
 methods = {
     "sort": bench_sort,
     "heapq.nsmallest": bench_heapq,
     "quickselect": bench_quickselect,
     "heapselect": bench_heapselect,
+    "nth_element": bench_nth_element,
 }
 
 def run_benchmarks():
     """
     Runs the benchmarks for different list sizes.
-    For each N in N_VALUES, constructs a random list of integers and then, for each K (as a percentage of N),
+    For each N in N_values, constructs a random list of integers and then, for each K (as a percentage of N),
     runs each method 5 times and records the median runtime.
     Returns a dictionary mapping each N to its benchmark results.
     """
@@ -111,47 +123,42 @@ def plot_results(overall_results):
     For each subplot, the x-axis shows K along with its percentage of N,
     and the y-axis shows the median time in ms.
     """
-    # Determine the number of charts (one for each N)
     num_charts = len(overall_results)
     fig, axes = plt.subplots(nrows=num_charts, ncols=1, figsize=(10, 4*num_charts))
 
-    # If only one subplot, put it into a list for uniform processing.
     if num_charts == 1:
         axes = [axes]
 
-    # Define bar appearance
-    bar_width = 0.2
+    # Bar appearance settings
+    bar_width = 0.15
     method_offsets = {
-        "sort": -bar_width,
-        "heapq.nsmallest": 0,
-        "quickselect": bar_width,
-        "heapselect": bar_width*2,
+        "sort": -2*bar_width,
+        "heapq.nsmallest": -bar_width,
+        "quickselect": 0,
+        "heapselect": bar_width,
+        "nth_element": 2*bar_width,
     }
     method_colors = {
         "sort": '#1f77b4',
         "heapq.nsmallest": '#ff7f0e',
         "quickselect": '#2ca02c',
-        "heapselect": '#d62728'
+        "heapselect": '#d62728',
+        "nth_element": '#9467bd',
     }
 
-    # Sort the overall_results by N for proper ordering (smallest to largest)
+    # Process each chart (one per N value)
     for ax, (N, data) in zip(axes, sorted(overall_results.items(), key=lambda x: x[0])):
         K_VALUES = data["K_values"]
         results = data["results"]
-        # Create x positions (one per K value)
         x_positions = list(range(len(K_VALUES)))
-        # Create x-axis labels as "K (percentage)" with comma formatting for K
         x_labels = [f"{K:,} ({(K/N)*100:.1f}%)" for K in K_VALUES]
 
         for method, timing_dict in results.items():
-            # Extract times (convert seconds to milliseconds)
             times_ms = [timing_dict[K]*1000 for K in K_VALUES]
-            # Compute adjusted positions for grouped bars
             positions = [x + method_offsets[method] for x in x_positions]
             bars = ax.bar(positions, times_ms, width=bar_width, label=method, color=method_colors.get(method))
             ax.bar_label(bars, fmt='%.2f', padding=1, fontsize=8)
 
-        # Use comma formatting for N in the title
         ax.set_title(f"N = {N:,}")
         ax.set_xlabel("K (percentage of N)")
         ax.set_ylabel("Median time (ms)")
@@ -160,7 +167,6 @@ def plot_results(overall_results):
         ax.legend(title="Method")
         ax.grid(True, linestyle='--', alpha=0.5)
 
-    # Improved overall title for the charts
     plt.suptitle("Performance Benchmark for N-Smallest Methods", fontsize=18)
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.savefig('plot.png')
