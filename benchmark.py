@@ -55,7 +55,9 @@ def bench_heapselect(values, K):
     lst = values.copy()
     # Partition in-place so that the element at index (K-1) is in the correct position.
     selectlib.heapselect(lst, K - 1)
-    return lst[:K]
+    result = lst[:K]
+    result.sort()
+    return result
 
 # List of methods to benchmark
 methods = {
