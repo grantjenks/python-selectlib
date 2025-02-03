@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Benchmark comparisons for three methods to obtain the K smallest items from a list,
+Benchmark comparisons for four methods to obtain the K smallest items from a list,
 for various values of K with different list sizes N (varying from 1,000 to 1,000,000).
 
 For each method and each chosen K (as a percentage of N), the test is run 5 times
@@ -10,9 +10,10 @@ Methods benchmarked:
   1. Using built‐in sort: sort the list and slice the first K elements.
   2. Using heapq.nsmallest: use the heap‐based algorithm.
   3. Using quickselect: partition the list with selectlib.quickselect and slice the first K elements.
+  4. Using heapselect: partition the list with selectlib.heapselect and slice the first K elements.
 
 The benchmark results are then plotted as grouped bar charts (one per N value) in a vertical stack.
-Note: The percentages for K are now 0.1%, 1%, 10%, and 25% of N.
+Note: The percentages for K are now 0.2%, 1%, 10%, and 25% of N.
 """
 
 import random
@@ -40,17 +41,28 @@ def bench_quickselect(values, K):
     is in the correct sorted position; then sort and return the first K elements.
     """
     lst = values.copy()
-    # Partition in-place so that the element at index (K-1) is in the correct position.
+    # Partition in-place so that the element at index (K-1) is in the correct position
     selectlib.quickselect(lst, K - 1)
     result = lst[:K]
     result.sort()
     return result
+
+def bench_heapselect(values, K):
+    """
+    Use selectlib.heapselect on a copy of the list to partition it so that the element at index K-1
+    is in the correct sorted position; then sort and return the first K elements.
+    """
+    lst = values.copy()
+    # Partition in-place so that the element at index (K-1) is in the correct position.
+    selectlib.heapselect(lst, K - 1)
+    return lst[:K]
 
 # List of methods to benchmark
 methods = {
     "sort": bench_sort,
     "heapq.nsmallest": bench_heapq,
     "quickselect": bench_quickselect,
+    "heapselect": bench_heapselect,
 }
 
 def run_benchmarks():
@@ -111,11 +123,13 @@ def plot_results(overall_results):
         "sort": -bar_width,
         "heapq.nsmallest": 0,
         "quickselect": bar_width,
+        "heapselect": bar_width*2,
     }
     method_colors = {
         "sort": '#1f77b4',
         "heapq.nsmallest": '#ff7f0e',
-        "quickselect": '#2ca02c'
+        "quickselect": '#2ca02c',
+        "heapselect": '#d62728'
     }
 
     # Sort the overall_results by N for proper ordering (smallest to largest)
