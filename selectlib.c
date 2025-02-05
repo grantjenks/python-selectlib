@@ -32,14 +32,19 @@ less_than(PyObject *a, PyObject *b)
 /*
    Swap the elements at indices i and j in the Python list.
    If keys is not NULL, also swap the corresponding keys.
+   This version uses the official Python C-API (PyList_GetItem/PyList_SetItem)
+   to avoid direct access to the ob_item field.
 */
 static void
 swap_items(PyObject *list, Py_ssize_t i, Py_ssize_t j, PyObject **keys)
 {
-    PyListObject *lst = (PyListObject *)list;
-    PyObject *temp = lst->ob_item[i];
-    lst->ob_item[i] = lst->ob_item[j];
-    lst->ob_item[j] = temp;
+    PyObject *temp = PyList_GetItem(list, i);
+    Py_INCREF(temp);
+    PyObject *item_j = PyList_GetItem(list, j);
+    Py_INCREF(item_j);
+
+    PyList_SetItem(list, i, item_j);  /* Steals reference of item_j */
+    PyList_SetItem(list, j, temp);    /* Steals reference of temp */
 
     if (keys != NULL) {
         PyObject *temp_key = keys[i];
